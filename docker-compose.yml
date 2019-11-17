@@ -1,5 +1,71 @@
 version: "3.7"
+
+x-default:
+  &DEFAULT
+  build: .
+  image: mcoliveira/hello-airflow:latest
+  depends_on:
+    - airflow-postgres
+    - airflow-redis
+  environment:
+    - AIRFLOW__CELERY__BROKER_URL=redis://airflow-redis:6379/0
+    - AIRFLOW__CELERY__RESULT_BACKEND=db+postgresql://airflow_user:airflow_pass@airflow-postgres:5432/airflow_db
+    - AIRFLOW__CORE__EXECUTOR=CeleryExecutor
+    - AIRFLOW__CORE__LOAD_EXAMPLES=false
+    - AIRFLOW__CORE__SQL_ALCHEMY_CONN=postgresql://airflow_user:airflow_pass@airflow-postgres:5432/airflow_db
+    - AIRFLOW__CORE__SECURE_MODE=true
+    - C_FORCE_ROOT=true  # FIXME: Rebuild Dockerfile with non-root user
+  volumes:
+    - ./dags:/root/airflow/dags
+
 services:
-  airflow:
-    build: .
-    image: mcoliveira/hello-airflow:latest
+  airflow-webserver:
+    <<: *DEFAULT
+    command: airflow webserver -p 8080
+    container_name: hello_airflow_webserver
+    ports:
+      - "8080:8080"
+
+  airflow-worker-default:
+    <<: *DEFAULT
+    command: airflow worker
+    container_name: hello_airflow_worker_default
+
+  airflow-worker-custom:
+    <<: *DEFAULT
+    command: airflow worker -q custom
+    container_name: hello_airflow_worker_custom
+
+  airflow-scheduler:
+    <<: *DEFAULT
+    command: airflow scheduler
+    container_name: hello_airflow_scheduler
+
+  airflow-flower:
+    <<: *DEFAULT
+    command: airflow flower -p 8081
+    container_name: hello_airflow_flower
+    ports:
+      - "8081:8081"
+
+  airflow-redis:
+    image: redis:5.0.6-alpine
+    container_name: hello_airflow_redis
+    volumes:
+      - redis-data:/var/lib/redis
+
+  airflow-postgres:
+    image: postgres:9.6.15-alpine
+    container_name: hello_airflow_postgres
+    environment:
+      - POSTGRES_USER=airflow_user
+      - POSTGRES_PASSWORD=airflow_pass
+      - POSTGRES_DB=airflow_db
+    volumes:
+      - postgres-data:/var/lib/postgres
+
+volumes:
+  postgres-data:
+    driver: local
+  redis-data:
+    driver: local
